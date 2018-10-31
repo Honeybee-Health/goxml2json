@@ -8,18 +8,19 @@ import (
 
 // An Encoder writes JSON objects to an output stream.
 type Encoder struct {
-	w               io.Writer
-	err             error
-	contentPrefix   string
-	attributePrefix string
-	tc              encoderTypeConverter
+	w                io.Writer
+	err              error
+	contentPrefix    string
+	contentFieldName string
+	attributePrefix  string
+	tc               encoderTypeConverter
 }
 
 // NewEncoder returns a new encoder that writes to w.
-func NewEncoder(w io.Writer, plugins ...encoderPlugin) *Encoder {
-	e := &Encoder{w: w}
+func NewEncoder(w io.Writer, plugins ...plugin) *Encoder {
+	e := &Encoder{w: w, contentPrefix: contentPrefix, contentFieldName: contentFieldName, attributePrefix: attrPrefix}
 	for _, p := range plugins {
-		e = p.AddTo(e)
+		e = p.AddToEncoder(e)
 	}
 	return e
 }
@@ -31,12 +32,6 @@ func (enc *Encoder) Encode(root *Node) error {
 	}
 	if root == nil {
 		return nil
-	}
-	if enc.contentPrefix == "" {
-		enc.contentPrefix = contentPrefix
-	}
-	if enc.attributePrefix == "" {
-		enc.attributePrefix = attrPrefix
 	}
 
 	enc.err = enc.format(root, 0)
@@ -60,7 +55,7 @@ func (enc *Encoder) format(n *Node, lvl int) error {
 		if len(n.Data) > 0 {
 			enc.write("\"")
 			enc.write(enc.contentPrefix)
-			enc.write("content")
+			enc.write(enc.contentFieldName)
 			enc.write("\": ")
 			enc.write(sanitiseString(n.Data))
 			enc.write(", ")
@@ -73,7 +68,7 @@ func (enc *Encoder) format(n *Node, lvl int) error {
 			enc.write(label)
 			enc.write("\": ")
 
-			if len(children) > 1 {
+			if n.ChildrenAlwaysAsArray || len(children) > 1 {
 				// Array
 				enc.write("[")
 				for j, c := range children {
